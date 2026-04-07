@@ -17,7 +17,7 @@ dev = [
 ]
 
 [project.scripts]
-agent-memory = "mcp_server:main"
+agent-memory = "agent_memory.server:main"
 
 [build-system]
 requires = ["hatchling"]

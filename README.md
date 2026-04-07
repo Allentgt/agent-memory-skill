@@ -79,9 +79,12 @@ Run as a subprocess to expose tools to AI agents:
 # From project directory
 uv run agent-memory
 
-# Or install globally then run
-uv sync
-uv run agent-memory
+# Or if installed as uv tool
+uv tool install .
+uv tool run agent-memory
+
+# Or if installed globally via pip
+agent-memory
 ```
 
 ### OpenCode Integration

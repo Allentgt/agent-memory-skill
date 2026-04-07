@@ -138,7 +138,7 @@ class AgentMemory:
                         )
                         if similarity >= min_score:
                             results.append((data.get("content", ""), similarity))
-                    except (json.JSONDecodeError, TypeError):
+                    except json.JSONDecodeError, TypeError:
                         continue
             except Exception:
                 # Skip keys that have wrong type (e.g., string keys instead of hash)
@@ -193,16 +193,20 @@ class AgentMemory:
 
 
 # Convenience functions
-def remember(content: str, context: str = "default", **kwargs) -> None:
+def remember(
+    content: str, context: str = "default", index_name: str = "agent_memory"
+) -> None:
     """Store content in memory."""
-    with AgentMemory(**kwargs) as mem:
+    with AgentMemory(index_name=index_name) as mem:
         mem.remember(content, context)
 
 
-def recall(query: str, min_score: float = 0.3, **kwargs) -> List[Tuple[str, float]]:
+def recall(
+    query: str, min_score: float = 0.3, limit: int = 5, index_name: str = "agent_memory"
+) -> List[Tuple[str, float]]:
     """Search memory."""
-    with AgentMemory(**kwargs) as mem:
-        return mem.recall(query, min_score)
+    with AgentMemory(index_name=index_name) as mem:
+        return mem.recall(query, min_score, limit)
 
 
 __all__ = ["AgentMemory", "remember", "recall"]

@@ -1,225 +1,180 @@
 # Agent Memory Skill
 
-A Redis-based semantic memory skill for AI agents. Store and retrieve information using natural language queries with semantic similarity search.
+A Redis-based semantic memory skill for AI agents - store and recall information using natural language.
 
-## Features
+## What It Does
 
-- **Semantic Search**: Uses sentence-transformers for embeddings to find semantically similar content
-- **Redis Backend**: Stores memories in Redis with full-text search capabilities
-- **Python Fallback**: Reliable Python-based similarity computation when RediSearch vector search has issues
-- **Convenience Functions**: Simple `remember()` and `recall()` functions for easy use
-- **Configurable**: Customizable index names, embedding models, and Redis connection
+**Store memories:**
+```python
+remember("The user prefers dark mode theme", "preferences")
+remember("User is building a Python web app with FastAPI", "project")
+```
 
-## Requirements
+**Recall with natural language:**
+```python
+results = recall("What does the user like?")
+# Returns: [('The user prefers dark mode theme', 0.85), ...]
 
-- Python 3.9+
-- Redis server (with RediSearch module for best performance)
-- `redis` Python package
-- `sentence-transformers` Python package
+results = recall("What is being built?")
+# Returns: [('User is building a Python web app with FastAPI', 0.78), ...]
+```
 
 ## Installation
+
+### Option 1: uv (Recommended for OpenCode)
+
+```bash
+# Clone and install
+uv sync
+
+# Or add to existing project
+uv add git+https://github.com/Allentgt/opencode-memory-skill.git
+```
+
+### Option 2: pip
 
 ```bash
 pip install redis sentence-transformers python-dotenv
 ```
 
-## Quick Start
+### Option 3: Manual
 
-### 1. Configure Redis Connection
+```bash
+# Clone repo
+git clone https://github.com/Allentgt/opencode-memory-skill.git
+cd opencode-memory-skill
 
-Create a `.env` file in your project:
+# Install dependencies
+pip install -e .
+```
 
+## Redis Setup
+
+Start a Redis container:
+
+```bash
+docker run -d -p 6379:6379 redis/redis-stack:latest
+```
+
+Or create `.env` file:
 ```env
 REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DB=0
 ```
 
-### 2. Use the Skill
+## Quick Start
+
+### Basic Usage
 
 ```python
 from agent_memory import remember, recall
 
-# Store information in memory
-remember("User prefers dark mode theme", "preferences")
-remember("User is working on a Python project", "context")
+# Store information
+remember("User prefers dark mode", "preferences")
+remember("Working on a Python project", "context")
 
-# Search memory with natural language
+# Search - finds semantically similar content
 results = recall("What theme does the user prefer?")
-print(results)
-# Output: [('User prefers dark mode theme', 0.85)]
-
-# With custom parameters
-results = recall("What is the user working on?", min_score=0.5, limit=10)
+# [('User prefers dark mode', 0.85)]
 ```
 
-### 3. Using the AgentMemory Class
+### Natural Language Examples
+
+```python
+# Store various memories
+remember("The user likes minimalist UI design", "preferences")
+remember("Building an AI agent with semantic memory", "project")
+remember("Meeting scheduled for 2pm tomorrow", "schedule")
+remember("API docs at /docs/reference", "docs")
+
+# Query naturally - it understands meaning, not just keywords
+recall("What design preferences does user have?")
+# → [('The user likes minimalist UI design', 0.82)]
+
+recall("What is being built?")
+# → [('Building an AI agent with semantic memory', 0.76)]
+
+recall("When is the meeting?")
+# → [('Meeting scheduled for 2pm tomorrow', 0.71)]
+
+recall("Where is the documentation?")
+# → [('API docs at /docs/reference', 0.68)]
+```
+
+### OpenCode Integration
+
+Add to your agent workflow:
+
+```python
+import sys
+sys.path.insert(0, "/path/to/opencode-memory-skill")
+
+from agent_memory import remember, recall
+
+# In your agent prompts, call these functions to store/recall info
+```
+
+## API Reference
+
+### `remember(content: str, context: str = "default")`
+
+Store text in memory with optional context label.
+
+```python
+remember("User preference info", "preferences")
+remember("Code context", "codebase")
+remember("Meeting notes", "meetings")
+```
+
+### `recall(query: str, min_score: float = 0.3, limit: int = 5)`
+
+Search memory with natural language. Returns list of `(content, score)` tuples.
+
+```python
+# Basic search
+results = recall("search query")
+
+# With filters
+results = recall("query", min_score=0.5, limit=10)
+```
+
+### `AgentMemory` Class
+
+Full control over configuration:
 
 ```python
 from agent_memory import AgentMemory
 
-# Create with custom settings
-mem = AgentMemory(
-    index_name="my_agent_memory",
+with AgentMemory(
+    index_name="my_memory",
     embedding_model="sentence-transformers/all-MiniLM-L6-v2"
-)
-
-mem.connect()
-
-# Store memories
-mem.remember("Important information", "category")
-mem.remember("Another note", "notes")
-
-# Search
-results = mem.recall("What information do I have?", min_score=0.3)
-
-# Get memory count
-print(f"Total memories: {mem.count}")
-
-mem.close()
-
-# Or use context manager
-with AgentMemory() as mem:
-    mem.remember("Temporary note", "temp")
-    results = mem.recall("What notes exist?")
+) as mem:
+    mem.remember("Note", "context")
+    results = mem.recall("search query")
+    print(f"Total: {mem.count}")
 ```
-
-## Configuration Options
-
-### AgentMemory Constructor
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `index_name` | str | `"agent_memory"` | Redis key prefix for memory storage |
-| `embedding_model` | str | `"sentence-transformers/all-MiniLM-L6-v2"` | Model for generating embeddings |
-
-### recall() Function
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `query` | str | Required | Search query |
-| `min_score` | float | `0.3` | Minimum similarity score (0.0-1.0) |
-| `limit` | int | `5` | Maximum results to return |
-
-### remember() Function
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `content` | str | Required | Text content to remember |
-| `context` | str | `"default"` | Context label (e.g., 'conversation', 'codebase', 'docs') |
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `REDIS_HOST` | `"localhost"` | Redis server hostname |
-| `REDIS_PORT` | `6379` | Redis server port |
-| `REDIS_PASSWORD` | `None` | Redis password (optional) |
-| `REDIS_DB` | `0` | Redis database number |
-
-## Redis Setup
-
-### Using Docker
-
-```bash
-# Start Redis with RediSearch module
-docker run -d --name redis -p 6379:6379 redis/redis-stack:latest
-```
-
-### Using Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  redis:
-    image: redis/redis-stack:latest
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-volumes:
-  redis_data:
-```
+| `REDIS_HOST` | `localhost` | Redis server |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_PASSWORD` | - | Optional password |
+| `REDIS_DB` | `0` | Database number |
 
 ## How It Works
 
-1. **Embedding Generation**: When you call `remember()`, the content is converted to a 384-dimensional vector using sentence-transformers (all-MiniLM-L6-v2)
-2. **Storage**: The embedding is stored in Redis along with the content and context
-3. **Search**: When you call `recall()`, your query is converted to an embedding, and cosine similarity is computed against all stored memories
-4. **Results**: Memories are ranked by similarity score and returned
+1. **Embeddings**: Uses `sentence-transformers/all-MiniLM-L6-v2` to convert text → 384-dim vectors
+2. **Storage**: Redis hash with content + JSON embeddings
+3. **Search**: Cosine similarity finds semantically similar memories
 
-## Performance Notes
+## Requirements
 
-- First call loads the embedding model (~2-3 seconds)
-- Subsequent calls are faster due to model caching
-- Redis connection is reused across calls
-- For large memory banks, consider adding Redis indexing or using RediSearch vector capabilities
-
-## Using with OpenCode
-
-To use this skill with OpenCode, place the `agent_memory` folder in your project and import it:
-
-```python
-import sys
-sys.path.insert(0, '/path/to/agent_memory')
-
-from agent_memory import remember, recall
-```
-
-Or use as a reusable skill by copying to your OpenCode skills directory.
-
-## Example: Full Usage
-
-```python
-import os
-os.environ['REDIS_HOST'] = 'localhost'
-
-from agent_memory import remember, recall, AgentMemory
-
-# Store various types of information
-remember("User prefers dark mode", "preferences")
-remember("User is working on a Python web app", "project")
-remember("Meeting with team at 3pm", "schedule")
-remember("API documentation at /docs/api", "reference")
-
-# Search with different queries
-print(recall("What are user preferences?"))
-# [('User prefers dark mode', 0.92), ...]
-
-print(recall("What project is the user working on?"))
-# [('User is working on a Python web app', 0.89), ...]
-
-print(recall("When is the meeting?"))
-# [('Meeting with team at 3pm', 0.85), ...]
-
-# Using AgentMemory for more control
-with AgentMemory(index_name="custom") as mem:
-    mem.remember("Custom memory", "custom_context")
-    results = mem.recall("Custom query")
-```
-
-## Troubleshooting
-
-### Redis Connection Issues
-
-If you get connection errors:
-1. Check Redis is running: `redis-cli ping`
-2. Verify REDIS_HOST and REDIS_PORT in .env
-3. Check firewall settings
-
-### Model Download Issues
-
-If embedding model fails to load:
-1. Set HF_TOKEN environment variable for faster downloads
-2. Or download model manually first
-
-### Memory Errors
-
-If you get "WRONGTYPE" errors:
-1. Clear old keys: `redis-cli KEYS "agent_memory:*" | xargs redis-cli DEL`
-2. Or use a new index_name
+- Python 3.14+
+- Redis server
+- `redis`, `sentence-transformers`, `python-dotenv`
 
 ## License
 
-MIT License
+MIT

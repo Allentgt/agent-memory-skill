@@ -28,7 +28,12 @@ except ImportError:
     pass
 
 # Import agent memory
-from agent_memory import AgentMemory, remember as _remember, recall as _recall
+from agent_memory import (
+    AgentMemory,
+    remember as _remember,
+    recall as _recall,
+    clear as _clear,
+)
 
 
 # Enums
@@ -119,6 +124,20 @@ class MemoryCountInput(BaseModel):
     index_name: str = Field(
         default="agent_memory",
         description="Optional custom index name. Must match the index used when storing memories.",
+        max_length=100,
+    )
+
+
+class ClearMemoryInput(BaseModel):
+    """Input model for clearing memory index."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+    index_name: str = Field(
+        default="agent_memory",
+        description="The index name to clear. Use 'agent_memory' for default index.",
         max_length=100,
     )
 
@@ -314,6 +333,45 @@ async def agent_memory_count(params: MemoryCountInput) -> str:
 
     except Exception as e:
         return f"Error: Failed to get memory count: {type(e).__name__}: {str(e)}"
+
+
+@mcp.tool(
+    name="agent_memory_clear",
+    annotations={
+        "title": "Clear Memory Index",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_clear(params: ClearMemoryInput) -> str:
+    """Clear all memories from a specific index.
+
+    This tool permanently deletes all memory entries in the specified index.
+    Use with caution - this cannot be undone.
+
+    Args:
+        params (ClearMemoryInput): Validated input parameters containing:
+            - index_name (str): The index name to clear
+
+    Returns:
+        str: Confirmation message with count of deleted memories
+
+    Examples:
+        - Use when: "Clear all food preferences" -> params with index_name="agent_memory"
+        - Use when: "Reset the project memory" -> params with index_name="project"
+
+    Error Handling:
+        - Returns "Error: Redis connection failed" if Redis is unavailable
+        - Returns "Error: Failed to clear memory" on other failures
+    """
+    try:
+        deleted = _clear(index_name=params.index_name)
+        return f"Cleared {deleted} memory(ies) from index '{params.index_name}'"
+
+    except Exception as e:
+        return f"Error: Failed to clear memory: {type(e).__name__}: {str(e)}"
 
 
 if __name__ == "__main__":

@@ -191,6 +191,15 @@ class AgentMemory:
             self.connect()
         return len(self._conn.keys(f"{self.index_name}:mem:*"))
 
+    def clear(self) -> int:
+        """Delete all memories in this index. Returns count of deleted keys."""
+        if not self._conn:
+            self.connect()
+        keys = self._conn.keys(f"{self.index_name}:mem:*")
+        if keys:
+            self._conn.delete(*keys)
+        return len(keys)
+
 
 # Convenience functions
 def remember(
@@ -209,4 +218,10 @@ def recall(
         return mem.recall(query, min_score, limit)
 
 
-__all__ = ["AgentMemory", "remember", "recall"]
+def clear(index_name: str = "agent_memory") -> int:
+    """Delete all memories in the index. Returns count of deleted entries."""
+    with AgentMemory(index_name=index_name) as mem:
+        return mem.clear()
+
+
+__all__ = ["AgentMemory", "remember", "recall", "clear"]

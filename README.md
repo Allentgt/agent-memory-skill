@@ -5,13 +5,24 @@ Store and recall information using natural language. Uses Redis + sentence embed
 ## Installation
 
 ```bash
-# Recommended: uv
-uv add git+https://github.com/Allentgt/opencode-memory-skill.git
-
-# Or clone and install locally
+# Clone and install locally (recommended for development)
 git clone https://github.com/Allentgt/opencode-memory-skill.git
 cd opencode-memory-skill
 uv sync
+
+# Or install globally from GitHub
+uv pip install git+https://github.com/Allentgt/opencode-memory-skill.git
+
+# Or with pip
+pip install git+https://github.com/Allentgt/opencode-memory-skill.git
+```
+
+### Global CLI
+
+After installing globally, the `agent-memory` command is available:
+
+```bash
+agent-memory  # runs MCP server
 ```
 
 ## Redis Setup

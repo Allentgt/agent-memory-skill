@@ -10,19 +10,24 @@ git clone https://github.com/Allentgt/opencode-memory-skill.git
 cd opencode-memory-skill
 uv sync
 
-# Or install globally from GitHub
-uv pip install --system git+https://github.com/Allentgt/opencode-memory-skill.git
+# Or install as a uv tool (CLI only, no dependency pollution)
+uv tool install git+https://github.com/Allentgt/opencode-memory-skill.git
 
-# Or with pip
+# Or with pip globally
 pip install git+https://github.com/Allentgt/opencode-memory-skill.git
 ```
 
-### Global CLI
-
-After installing globally, the `agent-memory` command is available:
+### Run
 
 ```bash
-agent-memory  # runs MCP server
+# From project directory
+uv run agent-memory
+
+# Or if installed as uv tool
+uv tool run agent-memory
+
+# Or if installed globally via pip
+agent-memory
 ```
 
 ## Redis Setup

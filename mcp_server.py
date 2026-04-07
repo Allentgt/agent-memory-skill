@@ -318,3 +318,8 @@ async def agent_memory_count(params: MemoryCountInput) -> str:
 
 if __name__ == "__main__":
     mcp.run()
+
+
+def main():
+    """Entry point for CLI."""
+    mcp.run()

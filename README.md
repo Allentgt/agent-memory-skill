@@ -182,7 +182,7 @@ MIT
 
 ## MCP Server (Auto-Discovery)
 
-This package exposes `remember` and `recall` as MCP tools for automatic agent discovery.
+This package exposes `remember` and `recall` as MCP tools for automatic agent discovery. Uses FastMCP framework with full Pydantic validation and response format options.
 
 ### Run as MCP Server
 
@@ -209,7 +209,41 @@ Add to your OpenCode config:
 }
 ```
 
-Available tools:
-- **remember**: Store info in memory with context
-- **recall**: Search memory with natural language
-- **memory_count**: Get total memories
+### Available Tools
+
+| Tool | Description | Annotations |
+|------|-------------|-------------|
+| `agent_memory_remember` | Store information in memory with context | readOnly: false, idempotent: true |
+| `agent_memory_recall` | Search memory with natural language | readOnly: true, idempotent: true |
+| `agent_memory_count` | Get total memories | readOnly: true, idempotent: true |
+
+### Tool Parameters
+
+**agent_memory_remember:**
+- `content` (string, required): Content to store (max 50,000 chars)
+- `context` (string, optional): Context label (default: "default")
+- `index_name` (string, optional): Custom index name (default: "agent_memory")
+
+**agent_memory_recall:**
+- `query` (string, required): Natural language search query
+- `min_score` (float, optional): Min similarity 0.0-1.0 (default: 0.3)
+- `limit` (int, optional): Max results 1-100 (default: 5)
+- `index_name` (string, optional): Custom index name
+- `response_format` (string, optional): "markdown" or "json" (default: "markdown")
+
+**agent_memory_count:**
+- `index_name` (string, optional): Custom index name
+
+### Response Format
+
+Use `response_format` parameter in `agent_memory_recall`:
+
+```python
+# Markdown (default) - human readable
+results = recall("query", response_format="markdown")
+# Returns: "Found 2 memory(ies):\n- [0.85] Content here\n- [0.72] More content"
+
+# JSON - machine readable
+results = recall("query", response_format="json")
+# Returns: {"total": 2, "results": [{"content": "...", "score": 0.85}, ...]}
+```

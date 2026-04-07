@@ -11,7 +11,7 @@ cd opencode-memory-skill
 uv sync
 
 # Or install globally from GitHub
-uv pip install git+https://github.com/Allentgt/opencode-memory-skill.git
+uv pip install --system git+https://github.com/Allentgt/opencode-memory-skill.git
 
 # Or with pip
 pip install git+https://github.com/Allentgt/opencode-memory-skill.git

@@ -90,8 +90,20 @@ uv run agent-memory
 {
   "mcpServers": {
     "agent-memory": {
+      "command": "agent-memory"
+    }
+  }
+}
+```
+
+Or for uv tool run:
+
+```json
+{
+  "mcpServers": {
+    "agent-memory": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/opencode-memory-skill", "agent-memory"]
+      "args": ["tool", "run", "agent-memory"]
     }
   }
 }

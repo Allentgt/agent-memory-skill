@@ -1,0 +1,22 @@
+[project]
+name = "agent-memory"
+version = "0.1.0"
+description = "Redis-based semantic memory skill for AI agents"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "redis>=5.0.0",
+    "sentence-transformers>=3.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+
+[tool.uv.pip]
+system = true

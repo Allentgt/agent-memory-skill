@@ -178,3 +178,38 @@ with AgentMemory(
 ## License
 
 MIT
+
+
+## MCP Server (Auto-Discovery)
+
+This package exposes `remember` and `recall` as MCP tools for automatic agent discovery.
+
+### Run as MCP Server
+
+```bash
+# Install and run
+uv run agent-memory
+
+# Or directly
+python mcp_server.py
+```
+
+### OpenCode Integration
+
+Add to your OpenCode config:
+
+```json
+{
+  "mcpServers": {
+    "agent-memory": {
+      "command": "python",
+      "args": ["path/to/mcp_server.py"]
+    }
+  }
+}
+```
+
+Available tools:
+- **remember**: Store info in memory with context
+- **recall**: Search memory with natural language
+- **memory_count**: Get total memories

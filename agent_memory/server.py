@@ -9,6 +9,7 @@ import os
 import json
 from typing import List, Tuple, Optional
 from enum import Enum
+from datetime import datetime
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from mcp.server.fastmcp import FastMCP
@@ -30,9 +31,17 @@ except ImportError:
 # Import agent memory
 from agent_memory import (
     AgentMemory,
+    AgentMemoryAsync,
     remember as _remember,
     recall as _recall,
+    delete as _delete,
     clear as _clear,
+    cleanup as _cleanup,
+    remember_async,
+    recall_async,
+    delete_async,
+    clear_async,
+    cleanup_async,
 )
 
 
@@ -68,6 +77,12 @@ class RememberInput(BaseModel):
         default="agent_memory",
         description="Optional custom index name for memory storage. Defaults to 'agent_memory'.",
         max_length=100,
+    )
+    ttl_days: Optional[int] = Field(
+        default=None,
+        description="Optional TTL in days. If set, memory will auto-expire after this many days. None = no expiry.",
+        ge=1,
+        le=365,
     )
 
 
@@ -105,6 +120,19 @@ class RecallInput(BaseModel):
         default=ResponseFormat.MARKDOWN,
         description="Output format: 'markdown' for human-readable text, 'json' for machine-readable structured data.",
     )
+    context: Optional[str] = Field(
+        default=None,
+        description="Optional context filter. If set, only memories with matching context will be returned.",
+        max_length=100,
+    )
+    since: Optional[datetime] = Field(
+        default=None,
+        description="Optional start datetime for filtering memories (ISO8601 format). Only memories created after this time will be returned.",
+    )
+    until: Optional[datetime] = Field(
+        default=None,
+        description="Optional end datetime for filtering memories (ISO8601 format). Only memories created before this time will be returned.",
+    )
 
     @field_validator("query")
     @classmethod
@@ -138,6 +166,39 @@ class ClearMemoryInput(BaseModel):
     index_name: str = Field(
         default="agent_memory",
         description="The index name to clear. Use 'agent_memory' for default index.",
+        max_length=100,
+    )
+
+
+class DeleteMemoryInput(BaseModel):
+    """Input model for deleting a specific memory."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+    memory_id: str = Field(
+        ...,
+        description="The memory ID to delete. This is returned from the remember tool.",
+        min_length=1,
+    )
+    index_name: str = Field(
+        default="agent_memory",
+        description="The index name the memory belongs to.",
+        max_length=100,
+    )
+
+
+class CleanupMemoryInput(BaseModel):
+    """Input model for cleaning up expired memories."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+    index_name: str = Field(
+        default="agent_memory",
+        description="The index name to clean up.",
         max_length=100,
     )
 
@@ -185,8 +246,11 @@ async def agent_memory_remember(params: RememberInput) -> str:
         - Returns "Error: Failed to store memory" on other storage failures
     """
     try:
-        _remember(
-            content=params.content, context=params.context, index_name=params.index_name
+        memory_id = _remember(
+            content=params.content,
+            context=params.context,
+            index_name=params.index_name,
+            ttl_days=params.ttl_days,
         )
 
         # Truncate content for display if too long
@@ -194,7 +258,7 @@ async def agent_memory_remember(params: RememberInput) -> str:
         if len(params.content) > 50:
             display_content += "..."
 
-        return f"Remembered: {display_content}"
+        return f"Remembered [{memory_id}]: {display_content}"
 
     except Exception as e:
         return f"Error: Failed to store memory: {type(e).__name__}: {str(e)}"
@@ -266,6 +330,9 @@ async def agent_memory_recall(params: RecallInput) -> str:
             min_score=params.min_score,
             limit=params.limit,
             index_name=params.index_name,
+            context=params.context,
+            since=params.since,
+            until=params.until,
         )
 
         if not results:
@@ -372,6 +439,94 @@ async def agent_memory_clear(params: ClearMemoryInput) -> str:
 
     except Exception as e:
         return f"Error: Failed to clear memory: {type(e).__name__}: {str(e)}"
+
+
+@mcp.tool(
+    name="agent_memory_delete",
+    annotations={
+        "title": "Delete Specific Memory",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_delete(params: DeleteMemoryInput) -> str:
+    """Delete a specific memory by ID.
+
+    This tool deletes a single memory entry using the memory_id returned
+    from the remember tool. Use this to remove specific memories.
+
+    Args:
+        params (DeleteMemoryInput): Validated input parameters containing:
+            - memory_id (str): The memory ID to delete
+            - index_name (str): The index name the memory belongs to
+
+    Returns:
+        str: Confirmation message with count of deleted memories
+
+    Examples:
+        - Use when: "Delete the memory about user preferences" -> params with memory_id from remember response
+        - Don't use when: You want to clear all memories (use agent_memory_clear instead)
+
+    Error Handling:
+        - Returns "Error: Redis connection failed" if Redis is unavailable
+        - Returns "Error: Failed to delete memory" on other failures
+    """
+    try:
+        deleted = _delete(memory_id=params.memory_id, index_name=params.index_name)
+        if deleted:
+            return (
+                f"Deleted memory '{params.memory_id}' from index '{params.index_name}'"
+            )
+        else:
+            return (
+                f"Memory '{params.memory_id}' not found in index '{params.index_name}'"
+            )
+
+    except Exception as e:
+        return f"Error: Failed to delete memory: {type(e).__name__}: {str(e)}"
+
+
+@mcp.tool(
+    name="agent_memory_cleanup",
+    annotations={
+        "title": "Clean Up Expired Memories",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_cleanup(params: CleanupMemoryInput) -> str:
+    """Remove all expired memories from an index.
+
+    This tool removes all memories that have exceeded their TTL (time-to-live).
+    Memories with TTL set via remember() will be removed.
+
+    Args:
+        params (CleanupMemoryInput): Validated input parameters containing:
+            - index_name (str): The index name to clean up
+
+    Returns:
+        str: Confirmation message with count of removed memories
+
+    Examples:
+        - Use when: "Clean up old temporary memories" -> params with index_name="agent_memory"
+        - Use when: "Remove expired cache data" -> params with index_name="cache"
+
+    Error Handling:
+        - Returns "Error: Redis connection failed" if Redis is unavailable
+        - Returns "Error: Failed to cleanup memories" on other failures
+    """
+    try:
+        removed = _cleanup(index_name=params.index_name)
+        return (
+            f"Cleaned up {removed} expired memory(ies) from index '{params.index_name}'"
+        )
+
+    except Exception as e:
+        return f"Error: Failed to cleanup memories: {type(e).__name__}: {str(e)}"
 
 
 if __name__ == "__main__":

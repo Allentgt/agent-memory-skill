@@ -126,6 +126,7 @@ Or for uv tool run:
 - `content` (required): Text to store
 - `context` (optional): Category like "preferences", "project" (default: "default")
 - `index_name` (optional): Custom memory index (default: "agent_memory")
+- `ttl_days` (optional): TTL in days 1-365. Memories auto-expire after this many days. None = no expiry (default: None)
 
 **agent_memory_recall**
 - `query` (required): Natural language search
@@ -133,6 +134,16 @@ Or for uv tool run:
 - `limit` (optional): Max results 1-100 (default: 5)
 - `index_name` (optional): Which index to search
 - `response_format` (optional): "markdown" or "json" (default: "markdown")
+- `context` (optional): Filter by context label (e.g., "preferences", "project")
+- `since` (optional): ISO8601 datetime - only return memories created after this time
+- `until` (optional): ISO8601 datetime - only return memories created before this time
+
+**agent_memory_delete**
+- `memory_id` (required): The memory ID returned from remember
+- `index_name` (optional): Which index (default: "agent_memory")
+
+**agent_memory_cleanup**
+- `index_name` (optional): Clean up expired memories from this index (default: "agent_memory")
 
 ## Requirements
 

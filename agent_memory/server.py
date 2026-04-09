@@ -20,6 +20,22 @@ mcp = FastMCP("agent_memory_mcp")
 # Constants
 CHARACTER_LIMIT = 25000
 
+
+def truncate_response(text: str, limit: int = CHARACTER_LIMIT) -> str:
+    """Truncate response text to character limit.
+
+    Args:
+        text: Text to truncate
+        limit: Maximum characters (default: CHARACTER_LIMIT)
+
+    Returns:
+        Truncated text with indicator if truncated
+    """
+    if len(text) <= limit:
+        return text
+    return text[: limit - 20] + "\n\n[... truncated]"
+
+
 # Load environment
 try:
     from dotenv import load_dotenv
@@ -30,23 +46,15 @@ except ImportError:
 
 # Import agent memory
 from agent_memory import (
-    AgentMemory,
-    AgentMemoryAsync,
-    remember as _remember,
-    recall as _recall,
-    delete as _delete,
-    clear as _clear,
-    cleanup as _cleanup,
-    remember_batch as _remember_batch,
-    get_memory as _get_memory,
-    list_memories as _list_memories,
-    export_memories as _export_memories,
-    import_memories as _import_memories,
     remember_async,
     recall_async,
     delete_async,
     clear_async,
     cleanup_async,
+    list_memories,
+    get_memory,
+    export_memories,
+    import_memories,
 )
 
 
@@ -88,6 +96,10 @@ class RememberInput(BaseModel):
         description="Optional TTL in days. If set, memory will auto-expire after this many days. None = no expiry.",
         ge=1,
         le=365,
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' for human-readable, 'json' for machine-readable.",
     )
 
 
@@ -179,6 +191,10 @@ class ClearMemoryInput(BaseModel):
         description="The index name to clear. Use 'agent_memory' for default index.",
         max_length=100,
     )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' or 'json'.",
+    )
 
 
 class DeleteMemoryInput(BaseModel):
@@ -198,6 +214,10 @@ class DeleteMemoryInput(BaseModel):
         description="The index name the memory belongs to.",
         max_length=100,
     )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' or 'json'.",
+    )
 
 
 class CleanupMemoryInput(BaseModel):
@@ -211,6 +231,10 @@ class CleanupMemoryInput(BaseModel):
         default="agent_memory",
         description="The index name to clean up.",
         max_length=100,
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' or 'json'.",
     )
 
 
@@ -235,6 +259,10 @@ class RememberBatchInput(BaseModel):
         description="Optional TTL in days for all items.",
         ge=1,
         le=365,
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' or 'json'.",
     )
 
 
@@ -270,6 +298,11 @@ class ListMemoriesInput(BaseModel):
         ge=1,
         le=500,
     )
+    offset: int = Field(
+        default=0,
+        description="Number of memories to skip (for pagination).",
+        ge=0,
+    )
     context: Optional[str] = Field(
         default=None,
         description="Optional context filter.",
@@ -279,6 +312,10 @@ class ListMemoriesInput(BaseModel):
         default="agent_memory",
         description="The index name.",
         max_length=100,
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' or 'json'.",
     )
 
 
@@ -298,6 +335,10 @@ class ExportMemoriesInput(BaseModel):
         default="agent_memory",
         description="The index name.",
         max_length=100,
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' or 'json'.",
     )
 
 
@@ -321,6 +362,10 @@ class ImportMemoriesInput(BaseModel):
     merge: bool = Field(
         default=True,
         description="If False, clear existing memories first.",
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' or 'json'.",
     )
 
 
@@ -367,7 +412,7 @@ async def agent_memory_remember(params: RememberInput) -> str:
         - Returns "Error: Failed to store memory" on other storage failures
     """
     try:
-        memory_id = _remember(
+        memory_id = await remember_async(
             content=params.content,
             context=params.context,
             index_name=params.index_name,
@@ -446,7 +491,7 @@ async def agent_memory_recall(params: RecallInput) -> str:
         - Returns "No matching memories found." when no results meet the threshold
     """
     try:
-        results = _recall(
+        results = await recall_async(
             query=params.query,
             min_score=params.min_score,
             limit=params.limit,
@@ -469,14 +514,18 @@ async def agent_memory_recall(params: RecallInput) -> str:
                     for content, score in results
                 ],
             }
-            return json.dumps(response, indent=2)
+            response_text = json.dumps(response, indent=2)
         else:
             # Markdown format
             formatted = []
             for content, score in results:
                 formatted.append(f"- [{score:.2f}] {content}")
 
-            return f"Found {len(results)} memory(ies):\n" + "\n".join(formatted)
+            response_text = f"Found {len(results)} memory(ies):\n" + "\n".join(
+                formatted
+            )
+
+        return truncate_response(response_text)
 
     except Exception as e:
         return f"Error: Failed to recall memories: {type(e).__name__}: {str(e)}"
@@ -556,7 +605,7 @@ async def agent_memory_clear(params: ClearMemoryInput) -> str:
         - Returns "Error: Failed to clear memory" on other failures
     """
     try:
-        deleted = _clear(index_name=params.index_name)
+        deleted = await clear_async(index_name=params.index_name)
         return f"Cleared {deleted} memory(ies) from index '{params.index_name}'"
 
     except Exception as e:
@@ -596,7 +645,9 @@ async def agent_memory_delete(params: DeleteMemoryInput) -> str:
         - Returns "Error: Failed to delete memory" on other failures
     """
     try:
-        deleted = _delete(memory_id=params.memory_id, index_name=params.index_name)
+        deleted = await delete_async(
+            memory_id=params.memory_id, index_name=params.index_name
+        )
         if deleted:
             return (
                 f"Deleted memory '{params.memory_id}' from index '{params.index_name}'"
@@ -642,7 +693,7 @@ async def agent_memory_cleanup(params: CleanupMemoryInput) -> str:
         - Returns "Error: Failed to cleanup memories" on other failures
     """
     try:
-        removed = _cleanup(index_name=params.index_name)
+        removed = await cleanup_async(index_name=params.index_name)
         return (
             f"Cleaned up {removed} expired memory(ies) from index '{params.index_name}'"
         )
@@ -726,21 +777,39 @@ async def agent_memory_get(params: GetMemoryInput) -> str:
     },
 )
 async def agent_memory_list(params: ListMemoriesInput) -> str:
-    """List all memories with optional context filter.
+    """List all memories with optional context filter and pagination.
 
     Args:
         params (ListMemoriesInput): Validated input parameters
 
     Returns:
-        str: List of memories in JSON format
+        str: List of memories in requested format
     """
     try:
         memories = _list_memories(
             limit=params.limit,
+            offset=params.offset,
             context=params.context,
             index_name=params.index_name,
         )
-        return json.dumps({"total": len(memories), "memories": memories}, indent=2)
+
+        if params.response_format == ResponseFormat.JSON:
+            response_text = json.dumps(
+                {"total": len(memories), "memories": memories}, indent=2
+            )
+        else:
+            # Markdown format
+            if not memories:
+                return "No memories stored."
+            lines = [f"Found {len(memories)} memory(ies):"]
+            for mem in memories:
+                lines.append(
+                    f"- [{mem['memory_id']}] {mem['content'][:100]}"
+                    + ("" if len(mem["content"]) <= 100 else "...")
+                )
+            response_text = "\n".join(lines)
+
+        return truncate_response(response_text)
 
     except Exception as e:
         return f"Error: Failed to list memories: {type(e).__name__}: {str(e)}"

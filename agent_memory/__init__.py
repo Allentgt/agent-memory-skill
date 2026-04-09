@@ -244,7 +244,7 @@ class AgentMemory:
                                     "last_accessed": datetime.utcnow().isoformat(),
                                 },
                             )
-                    except (json.JSONDecodeError, TypeError, ValueError):
+                    except json.JSONDecodeError, TypeError, ValueError:
                         continue
             except Exception:
                 # Skip keys that have wrong type (e.g., string keys instead of hash)
@@ -276,7 +276,7 @@ class AgentMemory:
                 )
                 if similarity >= min_score:
                     results.append((data.get("content", ""), similarity))
-            except (json.JSONDecodeError, TypeError, ValueError):
+            except json.JSONDecodeError, TypeError, ValueError:
                 continue
 
         results.sort(key=lambda x: x[1], reverse=True)
@@ -305,7 +305,7 @@ class AgentMemory:
                 )
                 if similarity >= min_score:
                     results.append((data.get("content", ""), similarity))
-            except (json.JSONDecodeError, TypeError, ValueError):
+            except json.JSONDecodeError, TypeError, ValueError:
                 continue
 
         results.sort(key=lambda x: x[1], reverse=True)
@@ -506,12 +506,13 @@ class AgentMemory:
         }
 
     def list_memories(
-        self, limit: int = 50, context: Optional[str] = None
+        self, limit: int = 50, offset: int = 0, context: Optional[str] = None
     ) -> List[dict]:
-        """List all memories with optional context filter.
+        """List all memories with optional context filter and pagination.
 
         Args:
             limit: Maximum number of memories to return
+            offset: Number of memories to skip (for pagination)
             context: Optional context filter
 
         Returns:
@@ -561,7 +562,7 @@ class AgentMemory:
 
         # Sort by timestamp, most recent first
         memories.sort(key=lambda x: x["timestamp"], reverse=True)
-        return memories[:limit]
+        return memories[offset : offset + limit]
 
 
 # Convenience functions
@@ -700,13 +701,15 @@ def get_memory(memory_id: str, index_name: str = "agent_memory") -> Optional[dic
 
 def list_memories(
     limit: int = 50,
+    offset: int = 0,
     context: Optional[str] = None,
     index_name: str = "agent_memory",
 ) -> List[dict]:
-    """List all memories with optional context filter.
+    """List all memories with optional context filter and pagination.
 
     Args:
         limit: Maximum number of memories to return
+        offset: Number of memories to skip (for pagination)
         context: Optional context filter
         index_name: Memory index name
 
@@ -714,7 +717,7 @@ def list_memories(
         List[dict]: List of memory data with metadata
     """
     with AgentMemory(index_name=index_name) as mem:
-        return mem.list_memories(limit, context)
+        return mem.list_memories(limit, offset, context)
 
 
 def export_memories(
@@ -966,7 +969,7 @@ class AgentMemoryAsync:
                         )
                         if similarity >= min_score:
                             results.append((data.get("content", ""), similarity))
-                    except (json.JSONDecodeError, TypeError, ValueError):
+                    except json.JSONDecodeError, TypeError, ValueError:
                         continue
             except Exception:
                 continue

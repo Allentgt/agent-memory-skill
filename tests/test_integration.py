@@ -16,20 +16,10 @@ os.environ.setdefault("REDIS_DB", "15")
 
 @pytest.fixture
 def test_index():
-    """Create a test index name."""
-    return "test_integration"
+    """Create a unique test index name."""
+    import uuid
 
-
-@pytest.fixture(autouse=True)
-def cleanup_test_index(test_index):
-    """Clean up test index before and after each test."""
-    # Run sync cleanup before test
-    from agent_memory import clear
-
-    clear(index_name=test_index)
-    yield
-    # Run sync cleanup after test
-    clear(index_name=test_index)
+    return f"test_{uuid.uuid4().hex[:8]}"
 
 
 class TestIntegrationRememberRecall:

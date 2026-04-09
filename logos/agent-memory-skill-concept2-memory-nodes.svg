@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer storage/container shape -->
+  <rect x="40" y="40" width="120" height="120" rx="20" fill="none" stroke="url(#grad2)" stroke-width="6"/>
+  
+  <!-- Inner memory layers -->
+  <rect x="55" y="55" width="90" height="90" rx="12" fill="none" stroke="#10B981" stroke-width="3" opacity="0.6"/>
+  <rect x="70" y="70" width="60" height="60" rx="8" fill="none" stroke="#3B82F6" stroke-width="3" opacity="0.8"/>
+  
+  <!-- Core memory dot -->
+  <circle cx="100" cy="100" r="12" fill="url(#grad2)"/>
+  
+  <!-- Connected nodes -->
+  <circle cx="100" cy="55" r="6" fill="#10B981"/>
+  <circle cx="100" cy="145" r="6" fill="#3B82F6"/>
+  <circle cx="55" cy="100" r="6" fill="#10B981"/>
+  <circle cx="145" cy="100" r="6" fill="#3B82F6"/>
+  
+  <!-- Connection lines to edge -->
+  <line x1="100" y1="67" x2="100" y2="82" stroke="#10B981" stroke-width="2" opacity="0.5"/>
+  <line x1="100" y1="118" x2="100" y2="133" stroke="#3B82F6" stroke-width="2" opacity="0.5"/>
+  <line x1="67" y1="100" x2="82" y2="100" stroke="#10B981" stroke-width="2" opacity="0.5"/>
+  <line x1="118" y1="100" x2="133" y2="100" stroke="#3B82F6" stroke-width="2" opacity="0.5"/>
+  
+  <!-- Small data particles -->
+  <circle cx="65" cy="80" r="3" fill="#10B981"/>
+  <circle cx="135" cy="80" r="3" fill="#3B82F6"/>
+  <circle cx="65" cy="120" r="3" fill="#3B82F6"/>
+  <circle cx="135" cy="120" r="3" fill="#10B981"/>
+</svg>

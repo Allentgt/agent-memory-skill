@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="grad5" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#06B6D4;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EC4899;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Storage/memory shape (hexagon) -->
+  <polygon points="100,35 165,60 165,140 100,165 35,140 35,60" 
+           fill="none" stroke="url(#grad5)" stroke-width="5"/>
+  
+  <!-- Inner hexagon -->
+  <polygon points="100,50 150,70 150,130 100,150 50,130 50,70" 
+           fill="none" stroke="#8B5CF6" stroke-width="3" opacity="0.5"/>
+  
+  <!-- Flowing data streams -->
+  <path d="M35,80 Q60,80 65,100 Q70,120 100,120" 
+        stroke="#06B6D4" stroke-width="4" fill="none" stroke-linecap="round">
+    <animate attributeName="stroke-dasharray" values="0,100;100,0" dur="2s" repeatCount="indefinite"/>
+  </path>
+  <path d="M35,110 Q60,110 65,100" 
+        stroke="#06B6D4" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.6"/>
+  
+  <path d="M165,90 Q140,90 135,100 Q130,110 100,110" 
+        stroke="#EC4899" stroke-width="4" fill="none" stroke-linecap="round">
+    <animate attributeName="stroke-dasharray" values="0,100;100,0" dur="2s" repeatCount="indefinite"/>
+  </path>
+  <path d="M165,120 Q140,120 135,100" 
+        stroke="#EC4899" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.6"/>
+  
+  <!-- Processing dots -->
+  <circle cx="75" cy="95" r="6" fill="#06B6D4">
+    <animate attributeName="cy" values="95;105;95" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="100" cy="85" r="8" fill="#8B5CF6">
+    <animate attributeName="r" values="8;6;8" dur="1s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="125" cy="95" r="6" fill="#EC4899">
+    <animate attributeName="cy" values="95;85;95" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Center core -->
+  <circle cx="100" cy="100" r="10" fill="#8B5CF6" opacity="0.8"/>
+  
+  <!-- Outward flow arrows -->
+  <g stroke="#06B6D4" stroke-width="2" opacity="0.6">
+    <line x1="35" y1="70" x2="45" y2="70"/>
+    <line x1="165" y1="70" x2="155" y2="70"/>
+    <line x1="35" y1="130" x2="45" y2="130"/>
+    <line x1="165" y1="130" x2="155" y2="130"/>
+  </g>
+</svg>

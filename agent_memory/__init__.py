@@ -41,16 +41,34 @@ def _get_redis_connection():
 class AgentMemory:
     """Agent memory with semantic search capabilities using Redis."""
 
+    # Model presets
+    MODELS = {
+        "fast": "sentence-transformers/all-MiniLM-L6-v2",
+        "accurate": "sentence-transformers/all-mpnet-base-v2",
+    }
+
     def __init__(
         self,
         index_name: str = "agent_memory",
-        embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
+        embedding_model: Optional[str] = None,
     ):
         self.index_name = index_name
-        self.embedding_model = embedding_model
+
+        # Resolve model: allow explicit param, env var, or default
+        if embedding_model:
+            self.embedding_model = embedding_model
+        else:
+            model_choice = os.environ.get("AGENT_MEMORY_MODEL", "fast")
+            self.embedding_model = self.MODELS.get(model_choice, self.MODELS["fast"])
+
         self._conn = None
         self._model = None
         self._embedding_dim = 384
+
+    @classmethod
+    def list_models(cls) -> List[str]:
+        """List available embedding models."""
+        return list(cls.MODELS.keys())
 
     def _get_model(self):
         """Lazy load embedding model."""
@@ -145,6 +163,7 @@ class AgentMemory:
         context: Optional[str] = None,
         since: Optional[datetime] = None,
         until: Optional[datetime] = None,
+        keyword_boost: float = 0.0,
     ) -> List[Tuple[str, float]]:
         """Search memory for relevant content.
 
@@ -155,6 +174,7 @@ class AgentMemory:
             context: Optional context filter (e.g., "preferences", "project")
             since: Optional start datetime for filtering
             until: Optional end datetime for filtering
+            keyword_boost: Keyword boost factor (0.0 = semantic only, 1.0 = max keyword boost)
 
         Returns:
             List[Tuple[str, float]]: List of (content, similarity_score) tuples
@@ -163,6 +183,7 @@ class AgentMemory:
             self.connect()
 
         query_embedding = self._embed(query)
+        query_terms = set(query.lower().split())
 
         # Python-based similarity search (more reliable than RediSearch vector)
         keys = self._conn.keys(f"{self.index_name}:mem:*")
@@ -194,11 +215,35 @@ class AgentMemory:
                                 continue
 
                         stored_embedding = json.loads(data["embedding_json"])
-                        similarity = sum(
+                        semantic_score = sum(
                             a * b for a, b in zip(query_embedding, stored_embedding)
                         )
+
+                        # Hybrid: add keyword matching score
+                        keyword_score = 0.0
+                        if keyword_boost > 0:
+                            content_lower = data.get("content", "").lower()
+                            content_terms = set(content_lower.split())
+                            matching_terms = query_terms & content_terms
+                            if query_terms:
+                                keyword_score = len(matching_terms) / len(query_terms)
+
+                        # Combined score
+                        similarity = semantic_score + (keyword_score * keyword_boost)
+
                         if similarity >= min_score:
                             results.append((data.get("content", ""), similarity))
+
+                            # Update access metadata
+                            mem_id = key.split(":")[-1]
+                            access_count = int(data.get("access_count", 0))
+                            self._conn.hset(
+                                key,
+                                mapping={
+                                    "access_count": str(access_count + 1),
+                                    "last_accessed": datetime.utcnow().isoformat(),
+                                },
+                            )
                     except (json.JSONDecodeError, TypeError, ValueError):
                         continue
             except Exception:
@@ -390,6 +435,134 @@ class AgentMemory:
             self._conn.delete(*keys)
         return len(keys)
 
+    def remember_batch(
+        self, items: List[Tuple[str, str]], ttl_days: Optional[int] = None
+    ) -> List[str]:
+        """Store multiple memories in a single call.
+
+        Args:
+            items: List of (content, context) tuples
+            ttl_days: Optional TTL in days for all items
+
+        Returns:
+            List[str]: List of memory_ids
+        """
+        if not self._conn:
+            self.connect()
+
+        import time
+
+        memory_ids = []
+        for content, context in items:
+            embedding = self._embed(content)
+            memory_id = f"mem:{int(time.time() * 1000000)}"
+            key = f"{self.index_name}:{memory_id}"
+
+            timestamp = datetime.utcnow().isoformat()
+            expires_at = None
+            if ttl_days is not None:
+                expires_at = (datetime.utcnow() + timedelta(days=ttl_days)).isoformat()
+
+            self._conn.hset(
+                key,
+                mapping={
+                    "content": content,
+                    "context": context,
+                    "embedding_json": json.dumps(embedding),
+                    "timestamp": timestamp,
+                    "expires_at": expires_at or "",
+                },
+            )
+            memory_ids.append(memory_id)
+
+        return memory_ids
+
+    def get_memory(self, memory_id: str) -> Optional[dict]:
+        """Get a single memory by ID with metadata.
+
+        Args:
+            memory_id: The memory ID
+
+        Returns:
+            Optional[dict]: Memory data with metadata, or None if not found
+        """
+        if not self._conn:
+            self.connect()
+
+        key = f"{self.index_name}:{memory_id}"
+        data = self._conn.hgetall(key)
+
+        if not data or "content" not in data:
+            return None
+
+        return {
+            "memory_id": memory_id,
+            "content": data.get("content", ""),
+            "context": data.get("context", "default"),
+            "timestamp": data.get("timestamp", ""),
+            "expires_at": data.get("expires_at", ""),
+            "access_count": int(data.get("access_count", 0)),
+            "last_accessed": data.get("last_accessed", ""),
+        }
+
+    def list_memories(
+        self, limit: int = 50, context: Optional[str] = None
+    ) -> List[dict]:
+        """List all memories with optional context filter.
+
+        Args:
+            limit: Maximum number of memories to return
+            context: Optional context filter
+
+        Returns:
+            List[dict]: List of memory data with metadata
+        """
+        if not self._conn:
+            self.connect()
+
+        keys = self._conn.keys(f"{self.index_name}:mem:*")
+        memories = []
+
+        for key in keys:
+            try:
+                data = self._conn.hgetall(key)
+                if "content" not in data:
+                    continue
+
+                # Context filtering
+                if context and data.get("context") != context:
+                    continue
+
+                # Check TTL expiry
+                expires_at = data.get("expires_at")
+                if expires_at:
+                    try:
+                        expiry = datetime.fromisoformat(expires_at)
+                        if datetime.utcnow() > expiry:
+                            continue
+                    except ValueError:
+                        pass
+
+                # Extract memory_id from key
+                mem_id = key.split(":")[-1]
+                memories.append(
+                    {
+                        "memory_id": mem_id,
+                        "content": data.get("content", ""),
+                        "context": data.get("context", "default"),
+                        "timestamp": data.get("timestamp", ""),
+                        "expires_at": data.get("expires_at", ""),
+                        "access_count": int(data.get("access_count", 0)),
+                        "last_accessed": data.get("last_accessed", ""),
+                    }
+                )
+            except Exception:
+                continue
+
+        # Sort by timestamp, most recent first
+        memories.sort(key=lambda x: x["timestamp"], reverse=True)
+        return memories[:limit]
+
 
 # Convenience functions
 def remember(
@@ -421,6 +594,7 @@ def recall(
     context: Optional[str] = None,
     since: Optional[datetime] = None,
     until: Optional[datetime] = None,
+    keyword_boost: float = 0.0,
 ) -> List[Tuple[str, float]]:
     """Search memory.
 
@@ -432,12 +606,13 @@ def recall(
         context: Optional context filter
         since: Optional start datetime
         until: Optional end datetime
+        keyword_boost: Keyword boost factor
 
     Returns:
         List[Tuple[str, float]]: List of (content, similarity_score) tuples
     """
     with AgentMemory(index_name=index_name) as mem:
-        return mem.recall(query, min_score, limit, context, since, until)
+        return mem.recall(query, min_score, limit, context, since, until, keyword_boost)
 
 
 def delete(memory_id: str, index_name: str = "agent_memory") -> bool:
@@ -488,6 +663,155 @@ def clear(index_name: str = "agent_memory") -> int:
     """Delete all memories in the index. Returns count of deleted entries."""
     with AgentMemory(index_name=index_name) as mem:
         return mem.clear()
+
+
+def remember_batch(
+    items: List[Tuple[str, str]],
+    index_name: str = "agent_memory",
+    ttl_days: Optional[int] = None,
+) -> List[str]:
+    """Store multiple memories in a single call.
+
+    Args:
+        items: List of (content, context) tuples
+        index_name: Memory index name
+        ttl_days: Optional TTL in days for all items
+
+    Returns:
+        List[str]: List of memory_ids
+    """
+    with AgentMemory(index_name=index_name) as mem:
+        return mem.remember_batch(items, ttl_days)
+
+
+def get_memory(memory_id: str, index_name: str = "agent_memory") -> Optional[dict]:
+    """Get a single memory by ID with metadata.
+
+    Args:
+        memory_id: The memory ID
+        index_name: Memory index name
+
+    Returns:
+        Optional[dict]: Memory data with metadata, or None if not found
+    """
+    with AgentMemory(index_name=index_name) as mem:
+        return mem.get_memory(memory_id)
+
+
+def list_memories(
+    limit: int = 50,
+    context: Optional[str] = None,
+    index_name: str = "agent_memory",
+) -> List[dict]:
+    """List all memories with optional context filter.
+
+    Args:
+        limit: Maximum number of memories to return
+        context: Optional context filter
+        index_name: Memory index name
+
+    Returns:
+        List[dict]: List of memory data with metadata
+    """
+    with AgentMemory(index_name=index_name) as mem:
+        return mem.list_memories(limit, context)
+
+
+def export_memories(
+    filepath: str,
+    index_name: str = "agent_memory",
+) -> int:
+    """Export memories to JSON file.
+
+    Args:
+        filepath: Path to export file
+        index_name: Memory index name
+
+    Returns:
+        int: Number of memories exported
+    """
+    with AgentMemory(index_name=index_name) as mem:
+        memories = mem.list_memories(limit=10000)
+
+        export_data = {
+            "version": "1.0",
+            "index_name": index_name,
+            "exported_at": datetime.utcnow().isoformat(),
+            "memories": [],
+        }
+
+        for mem_data in memories:
+            mem_id = mem_data["memory_id"]
+            key = f"{index_name}:{mem_id}"
+            data = mem._conn.hgetall(key)
+            if data and "embedding_json" in data:
+                export_data["memories"].append(
+                    {
+                        "content": data.get("content", ""),
+                        "context": data.get("context", "default"),
+                        "timestamp": data.get("timestamp", ""),
+                        "expires_at": data.get("expires_at", ""),
+                        "embedding": json.loads(data["embedding_json"]),
+                    }
+                )
+
+        with open(filepath, "w") as f:
+            json.dump(export_data, f, indent=2)
+
+        return len(export_data["memories"])
+
+
+def import_memories(
+    filepath: str,
+    index_name: str = "agent_memory",
+    merge: bool = True,
+) -> int:
+    """Import memories from JSON file.
+
+    Args:
+        filepath: Path to import file
+        index_name: Target memory index name
+        merge: If False, clear existing memories first
+
+    Returns:
+        int: Number of memories imported
+    """
+    with open(filepath, "r") as f:
+        export_data = json.load(f)
+
+    with AgentMemory(index_name=index_name) as mem:
+        if not merge:
+            mem.clear()
+
+        import time
+
+        imported = 0
+
+        for mem_data in export_data.get("memories", []):
+            embedding = mem_data.get("embedding")
+            if not embedding:
+                continue
+
+            memory_id = f"mem:{int(time.time() * 1000000)}"
+            key = f"{index_name}:{memory_id}"
+
+            mem._conn.hset(
+                key,
+                mapping={
+                    "content": mem_data.get("content", ""),
+                    "context": mem_data.get("context", "default"),
+                    "embedding_json": json.dumps(embedding),
+                    "timestamp": mem_data.get(
+                        "timestamp", datetime.utcnow().isoformat()
+                    ),
+                    "expires_at": mem_data.get("expires_at", ""),
+                    "access_count": "0",
+                    "last_accessed": "",
+                },
+            )
+            imported += 1
+
+        return imported
 
 
 # Async implementation
@@ -596,12 +920,14 @@ class AgentMemoryAsync:
         context: Optional[str] = None,
         since: Optional[datetime] = None,
         until: Optional[datetime] = None,
+        keyword_boost: float = 0.0,
     ) -> List[Tuple[str, float]]:
         """Search memory for relevant content."""
         if not self._conn:
             await self.connect()
 
         query_embedding = await self._embed(query)
+        query_terms = set(query.lower().split())
 
         keys = await self._conn.keys(f"{self.index_name}:mem:*")
         results = []
@@ -808,6 +1134,11 @@ __all__ = [
     "delete",
     "delete_async",
     "recent",
+    "remember_batch",
+    "get_memory",
+    "list_memories",
+    "export_memories",
+    "import_memories",
     "cleanup",
     "cleanup_async",
     "clear",

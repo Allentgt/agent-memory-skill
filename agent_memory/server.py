@@ -37,6 +37,11 @@ from agent_memory import (
     delete as _delete,
     clear as _clear,
     cleanup as _cleanup,
+    remember_batch as _remember_batch,
+    get_memory as _get_memory,
+    list_memories as _list_memories,
+    export_memories as _export_memories,
+    import_memories as _import_memories,
     remember_async,
     recall_async,
     delete_async,
@@ -133,6 +138,12 @@ class RecallInput(BaseModel):
         default=None,
         description="Optional end datetime for filtering memories (ISO8601 format). Only memories created before this time will be returned.",
     )
+    keyword_boost: float = Field(
+        default=0.0,
+        description="Keyword boost factor (0.0 = semantic only, 1.0 = max keyword boost).",
+        ge=0.0,
+        le=1.0,
+    )
 
     @field_validator("query")
     @classmethod
@@ -200,6 +211,116 @@ class CleanupMemoryInput(BaseModel):
         default="agent_memory",
         description="The index name to clean up.",
         max_length=100,
+    )
+
+
+class RememberBatchInput(BaseModel):
+    """Input model for batch storing memories."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+    items: List[Tuple[str, str]] = Field(
+        ...,
+        description="List of (content, context) tuples to store.",
+    )
+    index_name: str = Field(
+        default="agent_memory",
+        description="Optional custom index name.",
+        max_length=100,
+    )
+    ttl_days: Optional[int] = Field(
+        default=None,
+        description="Optional TTL in days for all items.",
+        ge=1,
+        le=365,
+    )
+
+
+class GetMemoryInput(BaseModel):
+    """Input model for getting a single memory."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+    memory_id: str = Field(
+        ...,
+        description="The memory ID to retrieve.",
+        min_length=1,
+    )
+    index_name: str = Field(
+        default="agent_memory",
+        description="The index name.",
+        max_length=100,
+    )
+
+
+class ListMemoriesInput(BaseModel):
+    """Input model for listing memories."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+    limit: int = Field(
+        default=50,
+        description="Maximum number of memories to return.",
+        ge=1,
+        le=500,
+    )
+    context: Optional[str] = Field(
+        default=None,
+        description="Optional context filter.",
+        max_length=100,
+    )
+    index_name: str = Field(
+        default="agent_memory",
+        description="The index name.",
+        max_length=100,
+    )
+
+
+class ExportMemoriesInput(BaseModel):
+    """Input model for exporting memories."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+    filepath: str = Field(
+        ...,
+        description="Path to export file.",
+        min_length=1,
+    )
+    index_name: str = Field(
+        default="agent_memory",
+        description="The index name.",
+        max_length=100,
+    )
+
+
+class ImportMemoriesInput(BaseModel):
+    """Input model for importing memories."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+    filepath: str = Field(
+        ...,
+        description="Path to import file.",
+        min_length=1,
+    )
+    index_name: str = Field(
+        default="agent_memory",
+        description="Target index name.",
+        max_length=100,
+    )
+    merge: bool = Field(
+        default=True,
+        description="If False, clear existing memories first.",
     )
 
 
@@ -333,6 +454,7 @@ async def agent_memory_recall(params: RecallInput) -> str:
             context=params.context,
             since=params.since,
             until=params.until,
+            keyword_boost=params.keyword_boost,
         )
 
         if not results:
@@ -527,6 +649,162 @@ async def agent_memory_cleanup(params: CleanupMemoryInput) -> str:
 
     except Exception as e:
         return f"Error: Failed to cleanup memories: {type(e).__name__}: {str(e)}"
+
+
+@mcp.tool(
+    name="agent_memory_remember_batch",
+    annotations={
+        "title": "Batch Store Memories",
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_remember_batch(params: RememberBatchInput) -> str:
+    """Store multiple memories in a single call.
+
+    Args:
+        params (RememberBatchInput): Validated input parameters
+
+    Returns:
+        str: Confirmation message with count of stored memories
+    """
+    try:
+        memory_ids = _remember_batch(
+            items=params.items,
+            index_name=params.index_name,
+            ttl_days=params.ttl_days,
+        )
+        return f"Stored {len(memory_ids)} memory(ies) in index '{params.index_name}'"
+
+    except Exception as e:
+        return f"Error: Failed to store memories: {type(e).__name__}: {str(e)}"
+
+
+@mcp.tool(
+    name="agent_memory_get",
+    annotations={
+        "title": "Get Single Memory",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_get(params: GetMemoryInput) -> str:
+    """Get a single memory by ID with metadata.
+
+    Args:
+        params (GetMemoryInput): Validated input parameters
+
+    Returns:
+        str: Memory data in JSON format
+    """
+    try:
+        memory = _get_memory(
+            memory_id=params.memory_id,
+            index_name=params.index_name,
+        )
+        if memory:
+            return json.dumps(memory, indent=2)
+        else:
+            return f"Memory '{params.memory_id}' not found"
+
+    except Exception as e:
+        return f"Error: Failed to get memory: {type(e).__name__}: {str(e)}"
+
+
+@mcp.tool(
+    name="agent_memory_list",
+    annotations={
+        "title": "List All Memories",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_list(params: ListMemoriesInput) -> str:
+    """List all memories with optional context filter.
+
+    Args:
+        params (ListMemoriesInput): Validated input parameters
+
+    Returns:
+        str: List of memories in JSON format
+    """
+    try:
+        memories = _list_memories(
+            limit=params.limit,
+            context=params.context,
+            index_name=params.index_name,
+        )
+        return json.dumps({"total": len(memories), "memories": memories}, indent=2)
+
+    except Exception as e:
+        return f"Error: Failed to list memories: {type(e).__name__}: {str(e)}"
+
+
+@mcp.tool(
+    name="agent_memory_export",
+    annotations={
+        "title": "Export Memories",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_export(params: ExportMemoriesInput) -> str:
+    """Export memories to JSON file.
+
+    Args:
+        params (ExportMemoriesInput): Validated input parameters
+
+    Returns:
+        str: Confirmation message with count of exported memories
+    """
+    try:
+        count = _export_memories(
+            filepath=params.filepath,
+            index_name=params.index_name,
+        )
+        return f"Exported {count} memory(ies) to '{params.filepath}'"
+
+    except Exception as e:
+        return f"Error: Failed to export memories: {type(e).__name__}: {str(e)}"
+
+
+@mcp.tool(
+    name="agent_memory_import",
+    annotations={
+        "title": "Import Memories",
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_import(params: ImportMemoriesInput) -> str:
+    """Import memories from JSON file.
+
+    Args:
+        params (ImportMemoriesInput): Validated input parameters
+
+    Returns:
+        str: Confirmation message with count of imported memories
+    """
+    try:
+        count = _import_memories(
+            filepath=params.filepath,
+            index_name=params.index_name,
+            merge=params.merge,
+        )
+        return f"Imported {count} memory(ies) into index '{params.index_name}'"
+
+    except Exception as e:
+        return f"Error: Failed to import memories: {type(e).__name__}: {str(e)}"
 
 
 if __name__ == "__main__":

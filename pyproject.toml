@@ -5,7 +5,7 @@ description = "Redis-based semantic memory skill for AI agents"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "redis>=5.0.0",
+    "redis==7.4.0",
     "sentence-transformers>=3.0.0",
     "python-dotenv>=1.0.0",
     "mcp>=1.0.0",

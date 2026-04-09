@@ -41,6 +41,4 @@ Thumbs.db
 *.db
 
 # Sqlite-memory submodule (too large)
-sqlite-memory/
-memory.zip
-vector.lib
+.sisyphus/

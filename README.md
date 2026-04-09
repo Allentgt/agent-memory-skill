@@ -214,3 +214,28 @@ Or for uv tool run:
 - Python 3.14+
 - Redis server
 - Dependencies: `redis`, `sentence-transformers`, `python-dotenv`, `mcp`
+
+## OpenCode Skill Integration
+
+### Option 1: Load as On-Demand Skill
+
+This skill can be loaded when needed rather than running as a persistent MCP server:
+
+```bash
+# Load the skill when you need memory capabilities
+skill(agent-memory)
+```
+
+**Trigger phrases:**
+- "remember that..."
+- "store this information"
+- "don't forget that..."
+- "what do I know about..."
+- "search my memories"
+- "find information about..."
+
+Once loaded, use the Python API directly in your code.
+
+### Option 2: MCP Server (Persistent)
+
+For always-available memory tools, run as MCP server (see MCP Server section above).

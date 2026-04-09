@@ -1,8 +1,10 @@
-# Agent Memory 🧠
+<p align="center">
+  <img src="logos/agent-memory-banner.svg" alt="Agent Memory Banner" width="100%">
+</p>
 
 > Semantic memory storage for AI agents. Store and recall information using natural language.
 
-Agent Memory lets AI agents remember things using **semantic search** - it understands *meaning*, not just keywords. Built on Redis + sentence embeddings.
+Agent Memory lets AI agents remember things using **semantic search** - it understands *meaning*, not just keywords. Built on **Redis** + sentence embeddings.
 
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)

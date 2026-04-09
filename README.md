@@ -35,8 +35,8 @@ results = recall("What UI theme does the user like?")
 
 ```bash
 # Clone the repository
-git clone https://github.com/Allentgt/opencode-memory-skill.git
-cd opencode-memory-skill
+git clone https://github.com/Allentgt/agent-memory-skill.git
+cd agent-memory-skill
 
 # Install dependencies
 uv sync

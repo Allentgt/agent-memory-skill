@@ -1,6 +1,6 @@
 [project]
 name = "agent-memory"
-version = "0.1.0"
+version = "1.0.0"
 description = "Redis-based semantic memory skill for AI agents"
 readme = "README.md"
 requires-python = ">=3.14"

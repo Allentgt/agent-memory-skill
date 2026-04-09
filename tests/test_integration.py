@@ -1,8 +1,6 @@
 """
 Integration tests for agent_memory module.
 Requires running Redis and sentence-transformers model.
-
-These tests are skipped by default. Run with: pytest tests/test_integration.py -v
 """
 
 import pytest
@@ -15,16 +13,23 @@ os.environ.setdefault("REDIS_HOST", "localhost")
 os.environ.setdefault("REDIS_PORT", "6379")
 os.environ.setdefault("REDIS_DB", "15")
 
-# Skip all integration tests by default - they require Redis running
-pytestmark = pytest.mark.skip(
-    reason="Integration tests require Redis. Run with: pytest tests/test_integration.py -v --ignore-glob='conftest.py'"
-)
-
 
 @pytest.fixture
 def test_index():
     """Create a test index name."""
     return "test_integration"
+
+
+@pytest.fixture(autouse=True)
+def cleanup_test_index(test_index):
+    """Clean up test index before and after each test."""
+    # Run sync cleanup before test
+    from agent_memory import clear
+
+    clear(index_name=test_index)
+    yield
+    # Run sync cleanup after test
+    clear(index_name=test_index)
 
 
 class TestIntegrationRememberRecall:
@@ -112,8 +117,8 @@ class TestIntegrationDelete:
 
         memory_id = await remember_async("to be deleted", index_name=test_index)
 
-        # Verify it's stored
-        mem = await get_memory(memory_id, index_name=test_index)
+        # Verify it's stored (get_memory is sync)
+        mem = get_memory(memory_id, index_name=test_index)
         assert mem is not None
 
         # Delete it
@@ -121,7 +126,7 @@ class TestIntegrationDelete:
         assert deleted is True
 
         # Verify it's gone
-        mem = await get_memory(memory_id, index_name=test_index)
+        mem = get_memory(memory_id, index_name=test_index)
         assert mem is None
 
 
@@ -137,7 +142,8 @@ class TestIntegrationList:
         await remember_async("item 1", index_name=test_index)
         await remember_async("item 2", index_name=test_index)
 
-        memories = await list_memories(limit=10, index_name=test_index)
+        # list_memories is sync
+        memories = list_memories(limit=10, index_name=test_index)
 
         assert len(memories) >= 2
 
@@ -151,11 +157,11 @@ class TestIntegrationList:
             await remember_async(f"item {i}", index_name=test_index)
 
         # First page
-        page1 = await list_memories(limit=3, offset=0, index_name=test_index)
+        page1 = list_memories(limit=3, offset=0, index_name=test_index)
         assert len(page1) == 3
 
         # Second page
-        page2 = await list_memories(limit=3, offset=3, index_name=test_index)
+        page2 = list_memories(limit=3, offset=3, index_name=test_index)
         assert len(page2) == 3
 
         # No overlap
@@ -173,7 +179,7 @@ class TestIntegrationList:
         await remember_async("other", context="other", index_name=test_index)
 
         # Filter by context
-        prefs = await list_memories(context="preferences", index_name=test_index)
+        prefs = list_memories(context="preferences", index_name=test_index)
         assert len(prefs) == 2
         assert all(m["context"] == "preferences" for m in prefs)
 
@@ -184,12 +190,7 @@ class TestIntegrationExportImport:
     @pytest.mark.asyncio
     async def test_export_import(self, test_index):
         """Export and import should work."""
-        from agent_memory import (
-            remember_async,
-            export_memories,
-            import_memories,
-            clear_async,
-        )
+        from agent_memory import remember_async, export_memories, import_memories, clear
 
         # Store memories
         await remember_async("exported 1", index_name=test_index)
@@ -199,25 +200,23 @@ class TestIntegrationExportImport:
             export_path = f.name
 
         try:
-            # Export
-            count = await export_memories(export_path, index_name=test_index)
+            # Export (sync function)
+            count = export_memories(export_path, index_name=test_index)
             assert count >= 2
 
             # Clear and import to new index
-            await clear_async(index_name=f"{test_index}_imported")
-            await import_memories(
+            clear(index_name=f"{test_index}_imported")
+            import_memories(
                 export_path, index_name=f"{test_index}_imported", merge=False
             )
 
-            # Verify import worked
+            # Verify import worked (sync function)
             from agent_memory import list_memories
 
-            imported = await list_memories(
-                limit=10, index_name=f"{test_index}_imported"
-            )
+            imported = list_memories(limit=10, index_name=f"{test_index}_imported")
             assert len(imported) >= 2
 
-            await clear_async(index_name=f"{test_index}_imported")
+            clear(index_name=f"{test_index}_imported")
         finally:
             os.unlink(export_path)
 
@@ -248,36 +247,37 @@ class TestIntegrationCount:
     @pytest.mark.asyncio
     async def test_count(self, test_index):
         """Count should reflect stored memories."""
-        from agent_memory import remember_async, clear_async
+        from agent_memory import remember_async, clear
 
-        await clear_async(index_name=test_index)
+        clear(index_name=test_index)
 
         await remember_async("test 1", index_name=test_index)
         await remember_async("test 2", index_name=test_index)
 
-        from agent_memory import AgentMemoryAsync
+        # count is a property on AgentMemory, use context manager
+        from agent_memory import AgentMemory
 
-        async with AgentMemoryAsync(index_name=test_index) as mem:
-            count = await mem.count
+        with AgentMemory(index_name=test_index) as mem:
+            count = mem.count
 
         assert count >= 2
 
     @pytest.mark.asyncio
     async def test_clear(self, test_index):
         """Clear should remove all memories."""
-        from agent_memory import remember_async, clear_async
+        from agent_memory import remember_async, clear
 
         await remember_async("to clear 1", index_name=test_index)
         await remember_async("to clear 2", index_name=test_index)
 
-        deleted = await clear_async(index_name=test_index)
+        deleted = clear(index_name=test_index)
 
         assert deleted >= 2
 
-        # Verify empty
-        from agent_memory import AgentMemoryAsync
+        # Verify empty (count is sync property)
+        from agent_memory import AgentMemory
 
-        async with AgentMemoryAsync(index_name=test_index) as mem:
-            count = await mem.count
+        with AgentMemory(index_name=test_index) as mem:
+            count = mem.count
 
         assert count == 0

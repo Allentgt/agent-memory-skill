@@ -40,5 +40,6 @@ Thumbs.db
 # Test databases
 *.db
 
-# Sqlite-memory submodule (too large)
+# AI artifacts
+AGENTS.md
 .sisyphus/

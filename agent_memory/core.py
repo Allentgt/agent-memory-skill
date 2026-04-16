@@ -157,7 +157,7 @@ class AgentMemory:
                 similarity = sum(
                     a * b for a, b in zip(query_embedding, stored_embedding)
                 )
-            except json.JSONDecodeError, TypeError, ValueError, KeyError:
+            except (json.JSONDecodeError, TypeError, ValueError, KeyError):
                 similarity = 0.0
 
             # Keyword boost
@@ -360,7 +360,7 @@ class AgentMemoryAsync:
                 similarity = sum(
                     a * b for a, b in zip(query_embedding, stored_embedding)
                 )
-            except json.JSONDecodeError, TypeError, ValueError, KeyError:
+            except (json.JSONDecodeError, TypeError, ValueError, KeyError):
                 similarity = 0.0
 
             if keyword_boost > 0:

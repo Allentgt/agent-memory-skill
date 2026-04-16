@@ -33,21 +33,23 @@ def get_redis_config() -> Dict[str, Any]:
 
 
 class RedisStorage:
-    """Sync Redis storage with connection management."""
+    """Sync Redis storage with connection pooling."""
 
     def __init__(self, index_name: str = "agent_memory"):
         self.index_name = index_name
         self._conn = None
+        self._pool = None
         self._ensure_index_called = False
 
     @property
     def conn(self):
-        """Lazy Redis connection."""
-        if self._conn is None:
-            import redis
+        """Lazy Redis connection with pooling."""
+        import redis
 
+        if self._conn is None:
             config = get_redis_config()
-            self._conn = redis.Redis(**config, decode_responses=True)
+            self._pool = redis.ConnectionPool(**config, decode_responses=True)
+            self._conn = redis.Redis(connection_pool=self._pool)
         return self._conn
 
     def connect(self):
@@ -58,10 +60,13 @@ class RedisStorage:
         return self
 
     def close(self):
-        """Close connection."""
+        """Close connection and pool."""
         if self._conn:
             self._conn.close()
             self._conn = None
+        if self._pool:
+            self._pool.disconnect()
+            self._pool = None
 
     def __enter__(self):
         return self.connect()
@@ -89,7 +94,7 @@ class RedisStorage:
         timestamp: str,
         expires_at: Optional[str] = None,
     ):
-        """Store memory data."""
+        """Store memory data with optional TTL."""
         key = self._make_key(memory_id)
         self.conn.hset(
             key,
@@ -101,6 +106,15 @@ class RedisStorage:
                 "expires_at": expires_at or "",
             },
         )
+        # Set Redis TTL if expires_at is provided
+        if expires_at:
+            try:
+                expiry = datetime.fromisoformat(expires_at)
+                ttl_seconds = int((expiry - datetime.utcnow()).total_seconds())
+                if ttl_seconds > 0:
+                    self.conn.expire(key, ttl_seconds)
+            except (ValueError, OSError):
+                pass  # Ignore TTL errors - memory still stored
 
     def get(self, memory_id: str) -> Optional[Dict[str, str]]:
         """Get memory data."""
@@ -189,7 +203,7 @@ class AsyncRedisStorage:
         timestamp: str,
         expires_at: Optional[str] = None,
     ):
-        """Store memory data."""
+        """Store memory data with optional TTL."""
         key = self._make_key(memory_id)
         conn = await self.conn
         await conn.hset(
@@ -202,6 +216,15 @@ class AsyncRedisStorage:
                 "expires_at": expires_at or "",
             },
         )
+        # Set Redis TTL if expires_at is provided
+        if expires_at:
+            try:
+                expiry = datetime.fromisoformat(expires_at)
+                ttl_seconds = int((expiry - datetime.utcnow()).total_seconds())
+                if ttl_seconds > 0:
+                    await conn.expire(key, ttl_seconds)
+            except (ValueError, OSError):
+                pass  # Ignore TTL errors - memory still stored
 
     async def get(self, memory_id: str) -> Optional[Dict[str, str]]:
         """Get memory data."""

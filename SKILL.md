@@ -1,6 +1,6 @@
 ---
 name: agent-memory
-description: Provides semantic memory storage and retrieval using Redis + sentence embeddings. Store and recall information using natural language queries.
+description: Semantic memory storage and retrieval for AI agents using Redis + sentence embeddings. Use this skill whenever users want to store information for later retrieval, remember user preferences, track conversation context across sessions, build persistent knowledge bases, or search memories using natural language queries - even when they don't explicitly say "memory" or "remember". This skill provides the agent_memory_remember, agent_memory_recall, agent_memory_count, agent_memory_clear, agent_memory_delete, agent_memory_cleanup, and agent_memory_delete MCP tools for AI agents.
 ---
 
 # Agent Memory Skill
@@ -102,3 +102,30 @@ results = recall("FastAPI REST API", keyword_boost=0.3)
 - `REDIS_HOST` - Redis host (default: "localhost")
 - `REDIS_PORT` - Redis port (default: 6379)
 - `AGENT_MEMORY_MODEL` - "fast" (default) or "accurate"
+
+## Troubleshooting
+
+### Redis Connection Failed
+```
+Error: Redis connection failed
+```
+**Fix:** Ensure Redis is running:
+```bash
+docker run -d -p 6379:6379 redis/redis-stack:latest
+```
+Or check environment variables: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
+
+### Embedding Model Slow to Load
+First-time model download is slow (~100MB for fast model, ~420MB for accurate).
+**Tip:** Use `AGENT_MEMORY_MODEL=fast` for faster startup.
+
+### MCP Server Not Starting
+Ensure dependencies installed: `uv sync`
+Run with: `uv run agent-memory`
+
+## Performance Tips
+
+- Use `remember_batch()` for storing multiple items at once
+- Set appropriate `min_score` (higher = more precise, lower = more results)
+- Use `context` parameter to filter memories - reduces scan time
+- Use `AGENT_MEMORY_MODEL=fast` for lower latency (384 dims vs 768)

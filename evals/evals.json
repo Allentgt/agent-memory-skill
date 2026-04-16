@@ -1,0 +1,53 @@
+{
+  "skill_name": "agent-memory",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Remember that the user prefers dark mode for their IDE and works on Python projects using FastAPI. Store this in their preferences and project context.",
+      "expected_output": "Two memories stored - one in 'preferences' context about dark mode, one in 'project' context about FastAPI",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "The user said 'don't forget that my API keys are stored in environment variables and I use PostgreSQL for my main database'. Remember this with appropriate context tags.",
+      "expected_output": "Memory stored with context indicating it's about configuration/database",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "What do I know about the user's coding preferences? Search the stored memories.",
+      "expected_output": "Recall results showing memories about dark mode, FastAPI, API keys, PostgreSQL based on semantic similarity to 'coding preferences'",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Store these meeting notes: 'Standup - review PR #234, discuss Q4 roadmap, demo new feature'. Tag as 'meetings'.",
+      "expected_output": "Memory stored in 'meetings' context",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "I've been working on an agent memory system using Redis and sentence transformers. Remember this project context. Later, find all memories related to my tech stack.",
+      "expected_output": "First stores memory, then recall returns Redis/sentence-transformers related memories",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Store a temporary note that should expire in 1 day: 'Call dentist at 2pm'. Use TTL.",
+      "expected_output": "Memory stored with expires_at set to ~1 day from now",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "User mentioned they like TypeScript more than JavaScript. Remember this preference. Also remember they use VS Code with the Dracula theme.",
+      "expected_output": "Two preferences stored - language preference and editor theme preference",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "Search my memories for anything about database configuration or API security.",
+      "expected_output": "Recall results matching database/API security concepts (PostgreSQL, API keys)",
+      "files": []
+    }
+  ]
+}

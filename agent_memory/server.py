@@ -7,7 +7,7 @@ Uses FastMCP framework with Pydantic validation.
 
 import os
 import json
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from enum import Enum
 from datetime import datetime
 
@@ -362,6 +362,33 @@ class ImportMemoriesInput(BaseModel):
     merge: bool = Field(
         default=True,
         description="If False, clear existing memories first.",
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' or 'json'.",
+    )
+
+
+class ListIndexesInput(BaseModel):
+    """Input model for listing indexes."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+
+class DeleteIndexInput(BaseModel):
+    """Input model for deleting an index."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+    index_name: str = Field(
+        ...,
+        description="The index name to delete.",
+        min_length=1,
+        max_length=100,
     )
     response_format: ResponseFormat = Field(
         default=ResponseFormat.MARKDOWN,
@@ -876,6 +903,78 @@ async def agent_memory_import(params: ImportMemoriesInput) -> str:
         return f"Error: Failed to import memories: {type(e).__name__}: {str(e)}"
 
 
+@mcp.tool(
+    name="agent_memory_list_indexes",
+    annotations={
+        "title": "List Memory Indexes",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_list_indexes(params: ListIndexesInput) -> str:
+    """List all memory indexes in Redis.
+
+    Returns JSON with list of index names and their memory counts.
+    """
+    try:
+        from agent_memory.storage import RedisStorage
+
+        storage = RedisStorage()
+        storage.connect()
+        keys = storage.conn.keys("*:mem:*")
+        storage.close()
+
+        # Group by index name
+        indexes: Dict[str, int] = {}
+        for key in keys:
+            parts = key.split(":")
+            if len(parts) >= 2:
+                idx = parts[0]
+                indexes[idx] = indexes.get(idx, 0) + 1
+
+        return json.dumps(
+            {"indexes": [{"name": k, "count": v} for k, v in indexes.items()]}
+        )
+
+    except Exception as e:
+        return f"Error: Failed to list indexes: {type(e).__name__}: {str(e)}"
+
+
+@mcp.tool(
+    name="agent_memory_delete_index",
+    annotations={
+        "title": "Delete Memory Index",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    },
+)
+async def agent_memory_delete_index(params: DeleteIndexInput) -> str:
+    """Delete all memories in an index.
+
+    Args:
+        params (DeleteIndexInput): Validated input with index_name
+
+    Returns:
+        str: Confirmation message
+    """
+    try:
+        from agent_memory.storage import RedisStorage
+
+        storage = RedisStorage(params.index_name)
+        storage.connect()
+        deleted = storage.clear()
+        storage.close()
+
+        return f"Deleted {deleted} memory(ies) from index '{params.index_name}'"
+
+    except Exception as e:
+        return f"Error: Failed to delete index: {type(e).__name__}: {str(e)}"
+
+
 if __name__ == "__main__":
     mcp.run()
 
@@ -883,3 +982,62 @@ if __name__ == "__main__":
 def main():
     """Entry point for CLI."""
     mcp.run()
+
+
+# Tool: Health check for container orchestration
+class HealthCheckInput(BaseModel):
+    """Input model for health check."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True, validate_assignment=True, extra="forbid"
+    )
+
+
+async def _health_check_impl() -> dict:
+    """Check service health."""
+    health = {"status": "healthy", "checks": {}}
+
+    # Check Redis connection
+    try:
+        from agent_memory.storage import RedisStorage
+
+        storage = RedisStorage()
+        storage.connect()
+        storage.conn.ping()
+        storage.close()
+        health["checks"]["redis"] = "ok"
+    except Exception as e:
+        health["status"] = "unhealthy"
+        health["checks"]["redis"] = f"error: {type(e).__name__}"
+
+    # Check embedding model
+    try:
+        from agent_memory.embeddings import get_embedding_model
+
+        get_embedding_model()
+        health["checks"]["embedding_model"] = "ok"
+    except Exception as e:
+        health["checks"]["embedding_model"] = f"error: {type(e).__name__}"
+
+    return health
+
+
+@mcp.tool(
+    name="agent_memory_health",
+    annotations={
+        "title": "Health Check",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+    },
+)
+async def agent_memory_health(params: HealthCheckInput) -> str:
+    """Check service health for container orchestration.
+
+    Returns JSON with status, Redis connection, and embedding model availability.
+    Use this for container health checks (e.g., Docker HEALTHCHECK, Kubernetes liveness).
+    """
+    try:
+        health = await _health_check_impl()
+        return json.dumps(health, indent=2)
+    except Exception as e:
+        return json.dumps({"status": "unhealthy", "error": str(e)}, indent=2)

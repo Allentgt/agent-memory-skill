@@ -1,0 +1,22 @@
+[
+  {"query": "Remember that the user prefers dark mode for their IDE", "should_trigger": true},
+  {"query": "store this information: meeting notes from standup", "should_trigger": true},
+  {"query": "don't forget that my API uses JWT for auth", "should_trigger": true},
+  {"query": "what do I know about the user's project preferences", "should_trigger": true},
+  {"query": "search my memories for database configuration", "should_trigger": true},
+  {"query": "I need to remember that PostgreSQL is our main DB", "should_trigger": true},
+  {"query": "remember: user likes Python more than JavaScript", "should_trigger": true},
+  {"query": "Recall what programming languages the user mentioned", "should_trigger": true},
+  {"query": "Write a function to calculate fibonacci", "should_trigger": false},
+  {"query": "Create a React component for buttons", "should_trigger": false},
+  {"query": "Explain how async/await works in Python", "should_trigger": false},
+  {"query": "Format this CSV file", "should_trigger": false},
+  {"query": "Build a simple REST API with Express", "should_trigger": false},
+  {"query": "What is the meaning of life", "should_trigger": false},
+  {"query": "Translate this to Spanish", "should_trigger": false},
+  {"query": "Create a pie chart from this data", "should_trigger": false},
+  {"query": "Fix the bug in login function", "should_trigger": false},
+  {"query": "What time is it", "should_trigger": false},
+  {"query": "Write a haiku about coding", "should_trigger": false},
+  {"query": "Find all files in the project", "should_trigger": false}
+]

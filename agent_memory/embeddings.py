@@ -41,11 +41,18 @@ class EmbeddingEngine:
         self._model = None
 
     def _load_model(self):
-        """Lazy load the sentence transformer model."""
+        """Lazy load the sentence transformer model with optimizations."""
         if self._model is None:
             from sentence_transformers import SentenceTransformer
+            from huggingface_hub import disable_progress_bar
+            disable_progress_bar()
 
-            self._model = SentenceTransformer(self.model_name)
+            # Configure for faster init
+            self._model = SentenceTransformer(
+                self.model_name,
+                cache_folder=os.environ.get("TRANSFORMERS_CACHE"),
+                device="cpu",
+            )
         return self._model
 
     def encode(self, text: str, normalize: bool = True) -> List[float]:
@@ -76,11 +83,17 @@ class AsyncEmbeddingEngine:
         self._model = None
 
     async def _load_model(self):
-        """Lazy load the sentence transformer model."""
+        """Lazy load the sentence transformer model with optimizations."""
         if self._model is None:
             from sentence_transformers import SentenceTransformer
+            from huggingface_hub import disable_progress_bar
+            disable_progress_bar()
 
-            self._model = SentenceTransformer(self.model_name)
+            self._model = SentenceTransformer(
+                self.model_name,
+                cache_folder=os.environ.get("TRANSFORMERS_CACHE"),
+                device="cpu",
+            )
         return self._model
 
     async def encode(self, text: str, normalize: bool = True) -> List[float]:

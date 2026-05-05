@@ -6,7 +6,7 @@ to provide semantic memory operations. No I/O dependencies here.
 """
 
 import json
-import time
+import uuid
 from typing import Optional, List, Tuple
 from datetime import datetime, timedelta
 
@@ -65,8 +65,8 @@ class AgentMemory:
         self.close()
 
     def _generate_id(self) -> str:
-        """Generate unique memory ID."""
-        return f"mem:{int(time.time() * 1000000)}"
+        """Generate unique memory ID using UUID."""
+        return f"mem:{uuid.uuid4().hex}"
 
     def remember(
         self, content: str, context: str = "default", ttl_days: Optional[int] = None
@@ -117,8 +117,19 @@ class AgentMemory:
             List[Tuple[str, float]]: List of (content, similarity_score) tuples
         """
         query_embedding = self.embedder.encode(query)
-        query_terms = set(query.lower().split())
 
+        if keyword_boost == 0.0 and since is None and until is None:
+            try:
+                results = self.storage.searchVectors(
+                    query_embedding, min_score, limit, context
+                )
+                if isinstance(results, list):
+                    return results
+            except (AttributeError, TypeError):
+                pass
+            return []
+
+        query_terms = set(query.lower().split())
         keys = self.storage.get_all_keys()
         results = []
 
@@ -131,7 +142,7 @@ class AgentMemory:
             if context and data.get("context") != context:
                 continue
 
-            # Time filtering
+            # Time filtering - note: still useful for non-expired filtering
             if since or until:
                 ts = data.get("timestamp")
                 if ts:
@@ -141,15 +152,7 @@ class AgentMemory:
                     if until and mem_time > until:
                         continue
 
-            # TTL check
-            expires_at = data.get("expires_at")
-            if expires_at:
-                try:
-                    expiry = datetime.fromisoformat(expires_at)
-                    if datetime.utcnow() > expiry:
-                        continue
-                except ValueError:
-                    pass
+            # TTL is handled by Redis - no manual check needed
 
             # Calculate similarity
             try:
@@ -180,10 +183,13 @@ class AgentMemory:
         return self.storage.delete(memory_id)
 
     def get(self, memory_id: str) -> Optional[dict]:
-        """Get memory with metadata."""
+        """Get memory with metadata and update access tracking."""
         data = self.storage.get(memory_id)
         if not data:
             return None
+
+        self.storage.update_access(memory_id)
+
         return {
             "memory_id": memory_id,
             "content": data.get("content", ""),
@@ -209,14 +215,7 @@ class AgentMemory:
             if context and data.get("context") != context:
                 continue
 
-            expires_at = data.get("expires_at")
-            if expires_at:
-                try:
-                    expiry = datetime.fromisoformat(expires_at)
-                    if datetime.utcnow() > expiry:
-                        continue
-                except ValueError:
-                    pass
+            # TTL handled by Redis - no manual check needed
 
             mem_id = key.split(":")[-1]
             memories.append(
@@ -287,8 +286,8 @@ class AgentMemoryAsync:
         await self.close()
 
     async def _generate_id(self) -> str:
-        """Generate unique memory ID."""
-        return f"mem:{int(time.time() * 1000000)}"
+        """Generate unique memory ID using UUID."""
+        return f"mem:{uuid.uuid4().hex}"
 
     async def remember(
         self, content: str, context: str = "default", ttl_days: Optional[int] = None
@@ -346,14 +345,7 @@ class AgentMemoryAsync:
                     if until and mem_time > until:
                         continue
 
-            expires_at = data.get("expires_at")
-            if expires_at:
-                try:
-                    expiry = datetime.fromisoformat(expires_at)
-                    if datetime.utcnow() > expiry:
-                        continue
-                except ValueError:
-                    pass
+            # TTL handled by Redis - no manual check needed
 
             try:
                 stored_embedding = json.loads(data["embedding_json"])
@@ -383,11 +375,14 @@ class AgentMemoryAsync:
         return await storage.delete(memory_id)
 
     async def get(self, memory_id: str) -> Optional[dict]:
-        """Get memory with metadata (async)."""
+        """Get memory with metadata and update access tracking."""
         storage = await self.storage
         data = await storage.get(memory_id)
         if not data:
             return None
+
+        await storage.update_access(memory_id)
+
         return {
             "memory_id": memory_id,
             "content": data.get("content", ""),
@@ -416,14 +411,7 @@ class AgentMemoryAsync:
             if context and data.get("context") != context:
                 continue
 
-            expires_at = data.get("expires_at")
-            if expires_at:
-                try:
-                    expiry = datetime.fromisoformat(expires_at)
-                    if datetime.utcnow() > expiry:
-                        continue
-                except ValueError:
-                    pass
+            # TTL handled by Redis - no manual check needed
 
             mem_id = key.split(":")[-1]
             memories.append(

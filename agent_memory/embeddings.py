@@ -6,6 +6,7 @@ and support for multiple embedding models.
 """
 
 import os
+import asyncio
 from typing import List, Optional
 
 # Model presets
@@ -44,8 +45,12 @@ class EmbeddingEngine:
         """Lazy load the sentence transformer model with optimizations."""
         if self._model is None:
             from sentence_transformers import SentenceTransformer
-            from huggingface_hub import disable_progress_bar
-            disable_progress_bar()
+            try:
+                from huggingface_hub import disable_progress_bar
+                disable_progress_bar()
+            except ImportError:
+                # disable_progress_bar not available in this version, ignore
+                pass
 
             # Configure for faster init
             self._model = SentenceTransformer(
@@ -86,8 +91,12 @@ class AsyncEmbeddingEngine:
         """Lazy load the sentence transformer model with optimizations."""
         if self._model is None:
             from sentence_transformers import SentenceTransformer
-            from huggingface_hub import disable_progress_bar
-            disable_progress_bar()
+            try:
+                from huggingface_hub import disable_progress_bar
+                disable_progress_bar()
+            except ImportError:
+                # disable_progress_bar not available in this version, ignore
+                pass
 
             self._model = SentenceTransformer(
                 self.model_name,
@@ -99,18 +108,28 @@ class AsyncEmbeddingEngine:
     async def encode(self, text: str, normalize: bool = True) -> List[float]:
         """Generate embedding for text (async).
 
+        Uses asyncio.to_thread to avoid blocking the event loop.
+
         Args:
             text: Text to embed
-            normalize: Whether to normalize embeddings (default: True)
+            Whether to normalize embeddings (default: True)
 
         Returns:
             List of embedding values
         """
         model = await self._load_model()
-        embedding = model.encode(text, normalize_embeddings=normalize)
+
+        def _encode():
+            return model.encode(text, normalize_embeddings=normalize)
+
+        embedding = await asyncio.to_thread(_encode)
         return embedding.tolist()
 
     async def get_dimension(self) -> int:
         """Get embedding dimension."""
         model = await self._load_model()
-        return model.get_sentence_embedding_dimension()
+
+        def _get_dim():
+            return model.get_sentence_embedding_dimension()
+
+        return await asyncio.to_thread(_get_dim)

@@ -1012,9 +1012,9 @@ async def _health_check_impl() -> dict:
 
     # Check embedding model
     try:
-        from agent_memory.embeddings import get_embedding_model
+        from agent_memory.embeddings import get_model_name
 
-        get_embedding_model()
+        get_model_name()
         health["checks"]["embedding_model"] = "ok"
     except Exception as e:
         health["checks"]["embedding_model"] = f"error: {type(e).__name__}"

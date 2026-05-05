@@ -16,6 +16,8 @@ Agent Memory lets AI agents remember things using **semantic search** - it under
 | Exact keyword match | Finds "dark mode" when you search "theme preferences" |
 | No context awareness | Understands meaning and relationships |
 | Flat storage | Organize by context ("preferences", "project", "meetings") |
+| O(n) scan | **Vector similarity search** with RediSearch (when available) |
+| Time-based filtering manual | TTL handled by Redis automatically |
 
 ## Quick Start
 
@@ -100,10 +102,11 @@ results = recall(
     keyword_boost=0.3   # Hybrid search
 )
 
-# Get single memory with metadata
+# Get single memory with metadata (includes access tracking)
 mem = get_memory(memory_id)
 # {'memory_id': 'mem:...', 'content': '...', 
-#  'context': '...', 'timestamp': '...', ...}
+#  'context': '...', 'timestamp': '...',
+#  'access_count': 0, 'last_accessed': '...'}
 
 # List all memories with pagination
 memories = list_memories(limit=50, offset=0, context="preferences")
@@ -199,6 +202,8 @@ uv run agent-memory
 | `agent_memory_clear` | Clear all memories |
 | `agent_memory_export` | Export to JSON |
 | `agent_memory_import` | Import from JSON |
+| `agent_memory_count` | Get memory count |
+| `agent_memory_cleanup` | Clean up expired memories |
 
 ## Configuration
 
@@ -216,6 +221,20 @@ uv run agent-memory
 
 - **fast** (default): `sentence-transformers/all-MiniLM-L6-v2` - Fast, 384 dimensions
 - **accurate**: `sentence-transformers/all-mpnet-base-v2` - More accurate, 768 dimensions
+
+## Features
+
+### Vector Similarity Search (VSS)
+When using Redis Stack, uses RediSearch KNN for O(log n) vector search. Falls back to O(n) scan for standard Redis.
+
+### Access Tracking
+Memories track `access_count` and `last_accessed` - automatically updated on retrieval.
+
+### UUID-Based IDs
+Every memory gets a unique UUID4 identifier - no collision risk.
+
+### Batch Optimization
+Multiple memories can be stored efficiently using Redis pipeline.
 
 ## OpenCode Skill
 

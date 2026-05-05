@@ -1,6 +1,6 @@
 ---
 name: agent-memory
-description: Semantic memory storage and retrieval for AI agents using Redis + sentence embeddings. Use this skill whenever users want to store information for later retrieval, remember user preferences, track conversation context across sessions, build persistent knowledge bases, or search memories using natural language queries - even when they don't explicitly say "memory" or "remember". This skill provides the agent_memory_remember, agent_memory_recall, agent_memory_count, agent_memory_clear, agent_memory_delete, agent_memory_cleanup, and agent_memory_delete MCP tools for AI agents.
+description: Semantic memory storage and retrieval for AI agents using Redis + sentence embeddings. Use this skill whenever users want to store information for later retrieval, remember user preferences, track conversation context across sessions, build persistent knowledge bases, or search memories using natural language queries - even when they don't explicitly say "memory" or "remember". This skill provides the agent_memory_remember, agent_memory_recall, agent_memory_count, agent_memory_clear, agent_memory_delete, agent_memory_cleanup, agent_memory_get, agent_memory_list, agent_memory_export, agent_memory_import, agent_memory_health MCP tools for AI agents.
 ---
 
 # Agent Memory Skill
@@ -71,6 +71,15 @@ memories = list_memories(limit=50, context="preferences")
 - `export_memories(filepath, index_name)` → int
 - `import_memories(filepath, index_name, merge)` → int
 
+### Async API
+
+```python
+from agent_memory import remember_async, recall_async
+
+await remember_async("Async storage", "notes")
+results = await recall_async("search query")
+```
+
 ## Examples
 
 ### Store User Preferences
@@ -129,3 +138,17 @@ Run with: `uv run agent-memory`
 - Set appropriate `min_score` (higher = more precise, lower = more results)
 - Use `context` parameter to filter memories - reduces scan time
 - Use `AGENT_MEMORY_MODEL=fast` for lower latency (384 dims vs 768)
+
+## Features
+
+### Vector Similarity Search (VSS)
+When using Redis Stack (FT.SEARCH available), uses RediSearch KNN for O(log n) search. Falls back to O(n) scan for standard Redis.
+
+### Access Tracking
+Memories track `access_count` and `last_accessed` - automatically updated on retrieval.
+
+### UUID-Based IDs
+Every memory gets a unique UUID4 identifier - no collision risk.
+
+### Batch Optimization
+Multiple memories stored efficiently using Redis pipeline.
